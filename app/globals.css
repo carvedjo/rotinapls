@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f4f6;
+  --foreground: #1f2937;
+  --gray: #666666;
+  --bg-calendar: #fdf6ec;
+  --border-color: #4b5563;
+  --hover-brightness: 0.92;
+}
+
+[data-theme='dark'] {
+  --background: #000000;
+  --foreground: #f3f4f6;
+  --bg-calendar: #1a1a1a;
+  --border-color: #374151;
+  --hover-brightness: 1.25;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-gray: var(--gray);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.calendar-cell {
+  background-color: var(--bg-calendar);
+  border-color: var(--border-color);
+  transition: filter 0.15s ease;
+}
+
+.calendar-cell:hover {
+  filter: brightness(var(--hover-brightness));
+}
