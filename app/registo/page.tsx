@@ -20,6 +20,9 @@ export default function RegistoPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${location.origin}/login`,
+      },
     })
 
     if (error) {

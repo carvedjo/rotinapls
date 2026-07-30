@@ -60,6 +60,7 @@ export default function CalendarView({
   const [color, setColor] = useState('#8B5CF6')
   const [showForm, setShowForm] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -90,6 +91,7 @@ export default function CalendarView({
 
   function handleSelectRoutine(routineId: string) {
     setActiveRoutineId(activeRoutineId === routineId ? null : routineId)
+    
   }
 
   function handleDayClick(date: string | null) {
@@ -135,9 +137,9 @@ export default function CalendarView({
   return (
     <div>
     
-    <div className="flex gap-8">
+    <div className="flex flex-col gap-4 md:flex-row md:gap-8">
       {/* Calendário */}
-      <div className="flex-1">
+      <div className="order-2 flex-1 md:order-1">
         <div className="mb-4 flex items-center gap-4">
           <button onClick={() => changeMonth(-1)} className="text-xl">‹</button>
           <h2 className="text-lg font-bold">
@@ -168,7 +170,7 @@ export default function CalendarView({
                 {date && (
                     <>
                     <div className="text-xs">{dayNumber}</div>
-                    <div className="absolute left-1 top-1/2 flex -translate-y-1/2 gap-1">
+                    <div className="absolute left-1 top-1/2 flex flex-col -translate-y-1/2 gap-0.5 md:flex-row md:gap-1">
                         {dayCheckins.map((c) => (
                         <span
                             key={c.routine_id}
@@ -186,8 +188,16 @@ export default function CalendarView({
         <ThemeSwitcher />
       </div>
 
-      {/* Menu de rotinas */}
-      <div className="w-56">
+        <div className="order-1 w-full md:order-2 md:w-56">
+        <button
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          className="mb-2 flex items-center gap-2 text-sm font-bold md:hidden"
+        >
+          ☰ Rotinas
+        </button>    
+
+        {/* Menu de rotinas */}
+        <div className={`w-full ${showMobileMenu ? 'block' : 'hidden'} md:block`}>
         <button
           onClick={() => setShowForm(!showForm)}
           className="mb-4 text-sm font-bold"
@@ -256,6 +266,7 @@ export default function CalendarView({
           </p>
         )}
       </div>
+    </div>
     </div>
     </div>
   )
