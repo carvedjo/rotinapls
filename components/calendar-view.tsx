@@ -238,13 +238,14 @@ export default function CalendarView({
               {routine.name}
               <button
                 onClick={(e) => {
-                  e.stopPropagation()
-                  startTransition(() => deleteRoutine(routine.id))
+                    e.stopPropagation()
+                    setRoutines((prev) => prev.filter((r) => r.id !== routine.id))
+                    startTransition(() => deleteRoutine(routine.id))
                 }}
                 className="ml-auto text-xs text-red-400"
-              >
+                >
                 ×
-              </button>
+            </button>
             </div>
           ))}
         </div>
