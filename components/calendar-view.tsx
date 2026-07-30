@@ -131,16 +131,27 @@ export default function CalendarView({
   }
 
   function toggleFolderExpanded(folderId: string) {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev)
-      if (next.has(folderId)) {
-        next.delete(folderId)
-      } else {
-        next.add(folderId)
-      }
-      return next
-    })
+  setExpandedFolders((prev) => {
+    const next = new Set(prev)
+    const wasExpanded = next.has(folderId)
+
+    if (wasExpanded) {
+      next.delete(folderId)
+    } else {
+      next.add(folderId)
+    }
+
+    return next
+  })
+
+  const wasExpanded = expandedFolders.has(folderId)
+  if (wasExpanded && activeRoutineId) {
+    const routine = getRoutine(activeRoutineId)
+    if (routine && routine.folder_id === folderId) {
+      setActiveRoutineId(null)
+    }
   }
+}
 
   function handleSelectRoutine(routineId: string) {
     setActiveRoutineId(activeRoutineId === routineId ? null : routineId)
