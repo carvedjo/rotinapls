@@ -10,7 +10,7 @@ const poppins = Poppins({
 })
 
 export const metadata: Metadata = {
-  title: 'RoutinaPls',
+  title: 'RotinaPls',
   description: 'Monitoriza as tuas rotinas e hábitos com um calendário visual.',
 }
 
