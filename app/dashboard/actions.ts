@@ -11,17 +11,22 @@ export async function createRoutine(name: string, tagColor: string) {
     throw new Error('Não autenticado')
   }
 
-  const { error } = await supabase.from('routines').insert({
-    name,
-    tag_color: tagColor,
-    user_id: user.id,
-  })
+  const { data, error } = await supabase
+    .from('routines')
+    .insert({
+      name,
+      tag_color: tagColor,
+      user_id: user.id,
+    })
+    .select()
+    .single()
 
   if (error) {
     throw new Error(error.message)
   }
 
   revalidatePath('/dashboard')
+  return data
 }
 
 export async function deleteRoutine(routineId: string) {

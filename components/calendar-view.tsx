@@ -26,6 +26,9 @@ function formatDateLocal(date: Date) {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+function isToday(date: string) {
+  return date === formatDateLocal(new Date())
+}
 
 function getCalendarDays(year: number, month: number) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -118,20 +121,32 @@ export default function CalendarView({
   }
 
     function handleAddRoutine(e: React.FormEvent) {
-        e.preventDefault()
-        if (!name.trim()) return
+      e.preventDefault()
+      if (!name.trim()) return
 
-        const tempId = crypto.randomUUID()
-        const newRoutine = { id: tempId, name, tag_color: color }
+      const tempId = crypto.randomUUID()
+      const newRoutine = { id: tempId, name, tag_color: color }
 
-        
-        setRoutines((prev) => [...prev, newRoutine])
-        setName('')
-        setShowForm(false)
+      setRoutines((prev) => [...prev, newRoutine])
+      setName('')
+      setShowForm(false)
 
-        startTransition(async () => {
-            await createRoutine(name, color)
-        })
+      startTransition(async () => {
+        try {
+          const created = await createRoutine(name, color)
+
+          
+          setRoutines((prev) =>
+            prev.map((r) =>
+              r.id === tempId
+                ? { id: created.id, name: created.name, tag_color: created.tag_color }
+                : r
+            )
+          )
+        } catch {
+          setRoutines((prev) => prev.filter((r) => r.id !== tempId))
+        }
+      })
     }
 
   return (
@@ -160,13 +175,16 @@ export default function CalendarView({
             const dayNumber = date ? date.split('-')[2] : ''
 
             return (
-                <div
-                    key={i}
-                    onClick={() => handleDayClick(date)}
-                    className={`calendar-cell relative h-20 rounded border p-1 ${
-                        date ? 'cursor-pointer' : ''
-                    } ${activeRoutineId && date ? 'ring-1 ring-gray-300' : ''}`}
-                >
+              <div
+                key={i}
+                onClick={() => handleDayClick(date)}
+                className={`calendar-cell relative h-20 rounded border p-1 ${
+                  date ? 'cursor-pointer' : ''
+                } ${activeRoutineId && date ? 'ring-1 ring-gray-300' : ''} ${
+                  date && isToday(date) ? 'border-2' : ''
+                }`}
+                style={date && isToday(date) ? { borderColor: 'var(--foreground)' } : undefined}
+              >
                 {date && (
                     <>
                     <div className="text-xs">{dayNumber}</div>
@@ -174,7 +192,7 @@ export default function CalendarView({
                         {dayCheckins.map((c) => (
                         <span
                             key={c.routine_id}
-                            className="h-4 w-4 rounded-full"
+                            className="h-2.5 w-2.5 rounded-full md:h-4 md:w-4"
                             style={{ backgroundColor: getRoutineColor(c.routine_id) }}
                         />
                         ))}

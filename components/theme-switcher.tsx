@@ -40,7 +40,7 @@ export default function ThemeSwitcher() {
       )}
 
       {mode === 'custom' && showCustomPanel && (
-        <div className="absolute left-0 top-full z-10 mt-2 flex items-center gap-3 rounded border bg-[var(--background)] p-2 shadow-md">
+        <div className="absolute left-0 top-full z-10 mt-2 flex w-64 flex-col gap-2 rounded border bg-[var(--background)] p-3 shadow-md md:w-auto md:flex-row md:items-center md:gap-3">
           <label className="flex items-center gap-1">
             Fundo
             <input
