@@ -40,42 +40,36 @@ export default function ThemeSwitcher() {
       )}
 
       {mode === 'custom' && showCustomPanel && (
-        <div className="absolute left-0 top-full z-10 mt-2 flex w-64 flex-col gap-2 rounded border bg-[var(--background)] p-3 shadow-md md:w-auto md:flex-row md:items-center md:gap-3">
-          <label className="flex items-center gap-1">
-            Fundo
+        <div className="absolute left-0 top-full z-10 mt-2 w-64 rounded border bg-[var(--background)] p-3 shadow-md">
+          <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2">
+            <label className="text-sm">Fundo</label>
             <input
               type="color"
               value={customColors.bgPage}
               onChange={(e) => setCustomColors({ ...customColors, bgPage: e.target.value })}
             />
-          </label>
-          <label className="flex items-center gap-1">
-            Células
+            <label className="text-sm">Células</label>
             <input
               type="color"
               value={customColors.bgCalendar}
               onChange={(e) => setCustomColors({ ...customColors, bgCalendar: e.target.value })}
             />
-          </label>
-          <label className="flex items-center gap-1">
-            Bordas
+            <label className="text-sm">Bordas</label>
             <input
               type="color"
               value={customColors.borderColor}
               onChange={(e) => setCustomColors({ ...customColors, borderColor: e.target.value })}
             />
-          </label>
-          <label className="flex items-center gap-1">
-            Texto
+            <label className="text-sm">Texto</label>
             <input
               type="color"
               value={customColors.textColor}
               onChange={(e) => setCustomColors({ ...customColors, textColor: e.target.value })}
             />
-          </label>
+          </div>
           <button
             onClick={() => setShowCustomPanel(false)}
-            className="rounded bg-black px-3 py-1 text-white"
+            className="mt-3 w-full rounded bg-black px-3 py-1 text-sm text-white"
           >
             Guardar
           </button>

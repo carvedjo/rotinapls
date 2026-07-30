@@ -10,6 +10,11 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
+  const { data: folders } = await supabase
+    .from('folders')
+    .select('*')
+    .order('created_at', { ascending: true })
+
   const { data: routines } = await supabase
     .from('routines')
     .select('*')
@@ -22,6 +27,7 @@ export default async function DashboardPage() {
   return (
     <div className="p-8">
       <CalendarView
+        initialFolders={folders ?? []}
         initialRoutines={routines ?? []}
         initialCheckins={checkins ?? []}
       />
