@@ -9,6 +9,8 @@ import {
   deleteFolderKeepRoutines,
   deleteFolderWithRoutines,
   updateRoutineFolder,
+  updateRoutineColor,
+  updateFolderColor,
 } from '@/app/dashboard/actions'
 import ThemeSwitcher from '@/components/theme-switcher'
 
@@ -49,6 +51,10 @@ function formatDateLocal(date: Date) {
 
 function isToday(date: string) {
   return date === formatDateLocal(new Date())
+}
+function getDotSize(count: number) {
+  const size = 28 / Math.sqrt(count || 1)
+  return Math.max(6, Math.min(32, size))
 }
 
 function getCalendarDays(year: number, month: number) {
@@ -95,6 +101,7 @@ export default function CalendarView({
   const [showMobileFolders, setShowMobileFolders] = useState(false)
   const [popoverInfo, setPopoverInfo] = useState<{ x: number; y: number; text: string } | null>(null)
   const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null)
+  const [openSettingsId, setOpenSettingsId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const year = currentDate.getFullYear()
@@ -131,27 +138,25 @@ export default function CalendarView({
   }
 
   function toggleFolderExpanded(folderId: string) {
-  setExpandedFolders((prev) => {
-    const next = new Set(prev)
-    const wasExpanded = next.has(folderId)
+    const wasExpanded = expandedFolders.has(folderId)
 
-    if (wasExpanded) {
-      next.delete(folderId)
-    } else {
-      next.add(folderId)
-    }
+    setExpandedFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(folderId)) {
+        next.delete(folderId)
+      } else {
+        next.add(folderId)
+      }
+      return next
+    })
 
-    return next
-  })
-
-  const wasExpanded = expandedFolders.has(folderId)
-  if (wasExpanded && activeRoutineId) {
-    const routine = getRoutine(activeRoutineId)
-    if (routine && routine.folder_id === folderId) {
-      setActiveRoutineId(null)
+    if (wasExpanded && activeRoutineId) {
+      const routine = getRoutine(activeRoutineId)
+      if (routine && routine.folder_id === folderId) {
+        setActiveRoutineId(null)
+      }
     }
   }
-}
 
   function handleSelectRoutine(routineId: string) {
     setActiveRoutineId(activeRoutineId === routineId ? null : routineId)
@@ -270,39 +275,76 @@ export default function CalendarView({
     startTransition(() => deleteRoutine(routineId))
   }
 
+  function handleUpdateRoutineColor(routineId: string, tagColor: string) {
+    setRoutines((prev) =>
+      prev.map((r) => (r.id === routineId ? { ...r, tag_color: tagColor } : r))
+    )
+    startTransition(() => updateRoutineColor(routineId, tagColor))
+  }
+
+  function handleUpdateFolderColor(folderId: string, colorValue: string) {
+    setFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, color: colorValue } : f)))
+    startTransition(() => updateFolderColor(folderId, colorValue))
+  }
+
   function renderRoutineItem(routine: Routine) {
+    const settingsOpen = openSettingsId === routine.id
+
     return (
-      <div
-        key={routine.id}
-        onClick={() => handleSelectRoutine(routine.id)}
-        className={`flex cursor-pointer items-center gap-2 rounded bg-black/5 p-2 text-sm ${
-          activeRoutineId === routine.id ? 'font-bold ring-1 ring-black/20' : 'hover:bg-black/10'
-        }`}
-      >
-        <span className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: routine.tag_color }} />
-        <span className="truncate" title={routine.name}>{routine.name}</span>
-        <select
-          value={routine.folder_id ?? ''}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => handleMoveRoutine(routine.id, e.target.value)}
-          className="ml-auto flex-shrink-0 rounded border bg-[var(--background)] text-xs"
+      <div key={routine.id}>
+        <div
+          onClick={() => handleSelectRoutine(routine.id)}
+          className={`flex cursor-pointer items-center gap-2 rounded bg-black/5 p-2 text-sm ${
+            activeRoutineId === routine.id ? 'font-bold ring-1 ring-black/20' : 'hover:bg-black/10'
+          }`}
         >
-          <option value="">Sem pasta</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDeleteRoutine(routine.id)
-          }}
-          className="flex-shrink-0 text-xs text-red-400"
-        >
-          ×
-        </button>
+          <span className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: routine.tag_color }} />
+          <span className="flex-1 truncate" title={routine.name}>{routine.name}</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpenSettingsId(settingsOpen ? null : routine.id)
+            }}
+            className="flex-shrink-0 text-xs"
+          >
+            ⚙️
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDeleteRoutine(routine.id)
+            }}
+            className="flex-shrink-0 text-xs text-red-400"
+          >
+            ×
+          </button>
+        </div>
+
+        {settingsOpen && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="mt-1 flex items-center gap-2 rounded bg-black/5 p-2 text-xs"
+          >
+            <select
+              value={routine.folder_id ?? ''}
+              onChange={(e) => handleMoveRoutine(routine.id, e.target.value)}
+              className="rounded border bg-[var(--background)] p-1"
+            >
+              <option value="">Sem pasta</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="color"
+              value={routine.tag_color}
+              onChange={(e) => handleUpdateRoutineColor(routine.id, e.target.value)}
+              className="h-6 w-8 rounded border"
+            />
+          </div>
+        )}
       </div>
     )
   }
@@ -343,40 +385,42 @@ export default function CalendarView({
                   }`}
                   style={today ? { borderColor: 'var(--foreground)' } : undefined}
                 >
-                  {date && (
-                    <>
-                      <div className="text-xs">{dayNumber}</div>
-                      <div className="absolute left-1 top-1/2 flex max-h-[40px] flex-col flex-wrap -translate-y-1/2 gap-0.5 md:max-h-[52px] md:flex-row md:content-start md:gap-1">
-                        {dayCheckins.map((c) => {
-                          const routine = getRoutine(c.routine_id)
-                          const folder = routine ? getFolder(routine.folder_id) : null
+                {date && (
+                <>
+                  <div className="text-xs">{dayNumber}</div>
+                  <div className="absolute inset-x-1 bottom-1 top-5 flex flex-wrap content-center items-center justify-center gap-0.5 overflow-hidden">
+                    {dayCheckins.map((c) => {
+                      const routine = getRoutine(c.routine_id)
+                      const folder = routine ? getFolder(routine.folder_id) : null
+                      const dotSize = getDotSize(dayCheckins.length)
 
-                          return (
-                            <span
-                              key={c.routine_id}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                const text = routine
-                                  ? folder
-                                    ? `${folder.name} > ${routine.name}`
-                                    : routine.name
-                                  : ''
-                                setPopoverInfo({ x: e.clientX, y: e.clientY, text })
-                              }}
-                              className="h-3 w-3 cursor-pointer rounded-full md:h-4 md:w-4"
-                              style={
-                                folder && routine
-                                  ? {
-                                      background: `conic-gradient(${folder.color} 0deg 180deg, ${routine.tag_color} 180deg 360deg)`,
-                                    }
-                                  : { backgroundColor: routine?.tag_color }
-                              }
-                            />
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
+                      return (
+                        <span
+                          key={c.routine_id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const text = routine
+                              ? folder
+                                ? `${folder.name} > ${routine.name}`
+                                : routine.name
+                              : ''
+                            setPopoverInfo({ x: e.clientX, y: e.clientY, text })
+                          }}
+                          className="cursor-pointer rounded-full"
+                          style={{
+                            width: dotSize,
+                            height: dotSize,
+                            flexShrink: 0,
+                            ...(folder && routine
+                              ? { background: `conic-gradient(${folder.color} 0deg 180deg, ${routine.tag_color} 180deg 360deg)` }
+                              : { backgroundColor: routine?.tag_color }),
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                </>
+              )}
                 </div>
               )
             })}
@@ -387,13 +431,22 @@ export default function CalendarView({
         {/* Menu lateral*/}
         <div className="order-1 w-full md:order-2 md:w-56">
 
-          {/*Rotinas*/}
-          <button
-            onClick={() => setShowMobileRoutines(!showMobileRoutines)}
-            className="mb-2 flex items-center gap-2 text-sm font-bold md:hidden"
-          >
-            ☰ Rotinas
-          </button>
+          {/* Rotinas */}
+            <button
+              onClick={() => {
+                const closing = showMobileRoutines
+                setShowMobileRoutines(!showMobileRoutines)
+                if (closing && activeRoutineId) {
+                  const routine = getRoutine(activeRoutineId)
+                  if (routine && !routine.folder_id) {
+                    setActiveRoutineId(null)
+                  }
+                }
+              }}
+              className="mb-2 flex items-center gap-2 text-sm font-bold md:hidden"
+            >
+              ☰ Rotinas
+            </button>
 
           <div className={`${showMobileRoutines ? 'block' : 'hidden'} md:block`}>
             <button onClick={handleToggleForm} className="mb-2 text-sm font-bold">
@@ -460,7 +513,16 @@ export default function CalendarView({
 
           {/* Pastas */}
           <button
-            onClick={() => setShowMobileFolders(!showMobileFolders)}
+            onClick={() => {
+              const closing = showMobileFolders
+              setShowMobileFolders(!showMobileFolders)
+              if (closing && activeRoutineId) {
+                const routine = getRoutine(activeRoutineId)
+                if (routine && routine.folder_id) {
+                  setActiveRoutineId(null)
+                }
+              }
+            }}
             className="mb-2 flex items-center gap-2 text-sm font-bold md:hidden"
           >
             ☰ Pastas
@@ -513,6 +575,7 @@ export default function CalendarView({
               {folders.map((folder) => {
                 const folderRoutines = routines.filter((r) => r.folder_id === folder.id)
                 const isExpanded = expandedFolders.has(folder.id)
+                const folderSettingsOpen = openSettingsId === folder.id
 
                 return (
                   <div key={folder.id} className="col-span-2 md:col-span-1">
@@ -521,18 +584,42 @@ export default function CalendarView({
                       className="flex cursor-pointer items-center gap-2 rounded bg-black/5 p-2 text-sm font-bold hover:bg-black/10"
                     >
                       <span className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: folder.color }} />
-                      <span className="truncate" title={folder.name}>{folder.name}</span>
+                      <span className="flex-1 truncate" title={folder.name}>{folder.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenSettingsId(folderSettingsOpen ? null : folder.id)
+                        }}
+                        className="flex-shrink-0 text-xs"
+                      >
+                        ⚙️
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
                           setFolderToDelete(folder)
                         }}
-                        className="ml-auto flex-shrink-0 text-xs text-red-400"
+                        className="flex-shrink-0 text-xs text-red-400"
                       >
                         ×
                       </button>
                       <span className="flex-shrink-0 text-xs">{isExpanded ? '▾' : '▸'}</span>
                     </div>
+
+                    {folderSettingsOpen && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 flex items-center gap-2 rounded bg-black/5 p-2 text-xs"
+                      >
+                        <span>Cor:</span>
+                        <input
+                          type="color"
+                          value={folder.color}
+                          onChange={(e) => handleUpdateFolderColor(folder.id, e.target.value)}
+                          className="h-6 w-8 rounded border"
+                        />
+                      </div>
+                    )}
 
                     {isExpanded && (
                       <div className="ml-4 mt-1 space-y-1">
@@ -566,14 +653,14 @@ export default function CalendarView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-80 rounded bg-[var(--background)] p-4 shadow-lg">
             <p className="mb-4 text-sm">
-              Apagar a pasta <strong>{folderToDelete.name}</strong>. Manter rotinas ou apagar tudo?
+              Apagar a pasta <strong>{folderToDelete.name}</strong>. Manter rotinas ou apagar?
             </p>
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => handleDeleteFolder(true)}
                 className="rounded border py-2 text-sm hover:bg-gray-100"
               >
-                Manter rotinas sem pasta
+                Manter rotinas soltas
               </button>
               <button
                 onClick={() => handleDeleteFolder(false)}

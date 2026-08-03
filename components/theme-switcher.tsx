@@ -15,6 +15,12 @@ export default function ThemeSwitcher() {
   return (
     <div className="relative mb-4 flex items-center gap-4 text-sm">
       <button
+        onClick={() => setMode('retro')}
+        className={mode === 'retro' ? 'font-bold underline' : ''}
+      >
+        Retro
+      </button>
+      <button
         onClick={() => setMode('light')}
         className={mode === 'light' ? 'font-bold underline' : ''}
       >

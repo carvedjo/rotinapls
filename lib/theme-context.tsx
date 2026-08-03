@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 
-type ThemeMode = 'light' | 'dark' | 'custom'
+type ThemeMode = 'light' | 'dark' | 'custom' | 'retro'
 
 type CustomColors = {
   bgPage: string

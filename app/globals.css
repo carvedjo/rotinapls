@@ -13,9 +13,18 @@
   --background: #000000;
   --foreground: #f3f4f6;
   --bg-calendar: #1a1a1a;
-  --border-color: #374151;
+  --border-color: #d4d4d4;
   --hover-brightness: 1.25;
 }
+[data-theme='retro'] {
+  --background: #f0e6d2;
+  --foreground: #2b2118;
+  --bg-calendar: #fdf6ec;
+  --border-color: #1f1b16;
+  --hover-brightness: 0.95;
+}
+
+
 
 @theme inline {
   --color-background: var(--background);
@@ -34,6 +43,9 @@ body {
 .calendar-cell {
   background-color: var(--bg-calendar);
   border-color: var(--border-color);
+  border-width: 3px;
+  border-radius: 14px;
+  box-shadow: 2px 2px 0 var(--border-color);
   transition: filter 0.15s ease;
 }
 
@@ -43,4 +55,9 @@ body {
 
 .calendar-cell.today {
   background-color: color-mix(in srgb, var(--foreground) 12%, var(--bg-calendar));
+  box-shadow: 2px 2px 0 var(--foreground);
+}
+
+.calendar-cell span[style*="background"] {
+  border: 2px solid var(--border-color);
 }

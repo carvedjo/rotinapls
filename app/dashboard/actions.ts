@@ -139,3 +139,32 @@ export async function deleteFolderWithRoutines(folderId: string) {
 
   revalidatePath('/dashboard')
 }
+export async function updateRoutineColor(routineId: string, tagColor: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('routines')
+    .update({ tag_color: tagColor })
+    .eq('id', routineId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard')
+}
+
+export async function updateFolderColor(folderId: string, color: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('folders')
+    .update({ color })
+    .eq('id', folderId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard')
+}
