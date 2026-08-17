@@ -28,7 +28,7 @@ const defaultCustomColors: CustomColors = {
 const ThemeContext = createContext<ThemeContextType | null>(null)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>('light')
+  const [mode, setModeState] = useState<ThemeMode>('retro')
   const [customColors, setCustomColorsState] = useState<CustomColors>(defaultCustomColors)
 
   useEffect(() => {
