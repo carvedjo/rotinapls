@@ -125,6 +125,7 @@ export default function CalendarView({
   const [addCreateOpen, setAddCreateOpen] = useState(false)
   const [addCreateChoice, setAddCreateChoice] = useState<'routine' | 'folder' | null>(null)
   const [addRoutineSettingsId, setAddRoutineSettingsId] = useState<string | null>(null)
+  const [routineToDelete, setRoutineToDelete] = useState<Routine | null>(null)
 
   useEffect(() => {
     function checkSize() {
@@ -345,6 +346,12 @@ export default function CalendarView({
     startTransition(() => updateFolderColor(folderId, colorValue))
   }
 
+  function confirmDeleteRoutine() {
+  if (!routineToDelete) return
+  handleDeleteRoutine(routineToDelete.id)
+  setRoutineToDelete(null)
+}
+
   function renderRoutineItem(routine: Routine) {
     const settingsOpen = openSettingsId === routine.id
 
@@ -370,7 +377,7 @@ export default function CalendarView({
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleDeleteRoutine(routine.id)
+              setRoutineToDelete(routine)
             }}
             className="flex-shrink-0 text-xs text-red-400"
           >
@@ -1122,6 +1129,29 @@ export default function CalendarView({
               </button>
               <button
                 onClick={() => setFolderToDelete(null)}
+                className="rounded py-2 text-sm opacity-60"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {routineToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-80 rounded bg-[var(--background)] p-4 shadow-lg">
+            <p className="mb-4 text-sm">
+              Tens a certeza que queres apagar <strong>{routineToDelete.name}</strong> respetivas marcações no calendário?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={confirmDeleteRoutine}
+                className="rounded bg-red-500 py-2 text-sm text-white"
+              >
+                Apagar
+              </button>
+              <button
+                onClick={() => setRoutineToDelete(null)}
                 className="rounded py-2 text-sm opacity-60"
               >
                 Cancelar
