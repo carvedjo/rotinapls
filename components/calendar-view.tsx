@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import {
   createRoutine,
   deleteRoutine,
@@ -52,10 +52,6 @@ function formatDateLocal(date: Date) {
 function isToday(date: string) {
   return date === formatDateLocal(new Date())
 }
-function getDotSize(count: number) {
-  const size = 28 / Math.sqrt(count || 1)
-  return Math.max(6, Math.min(32, size))
-}
 
 function getCalendarDays(year: number, month: number) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -73,6 +69,16 @@ function getCalendarDays(year: number, month: number) {
   }
 
   return days
+}
+
+function getContrastText(hex: string | undefined) {
+  if (!hex) return '#1f1b16'
+  const h = hex.replace('#', '')
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? '#1f1b16' : '#ffffff'
 }
 
 export default function CalendarView({
@@ -99,10 +105,35 @@ export default function CalendarView({
   const [folderColor, setFolderColor] = useState(PRESET_COLORS[0])
   const [showMobileRoutines, setShowMobileRoutines] = useState(false)
   const [showMobileFolders, setShowMobileFolders] = useState(false)
-  const [popoverInfo, setPopoverInfo] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [popoverInfo, setPopoverInfo] = useState<{
+    x: number
+    y: number
+    text: string
+    routineId: string
+    date: string
+  } | null>(null)
+  const [dayPicker, setDayPicker] = useState<{ x: number; y: number; date: string } | null>(null)
+  const [dayPickerExpandedFolder, setDayPickerExpandedFolder] = useState<string | null>(null)
+  const [dayDetailOpen, setDayDetailOpen] = useState<string | null>(null)
   const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null)
   const [openSettingsId, setOpenSettingsId] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [addSectionOpen, setAddSectionOpen] = useState(false)
+  const [addRoutinesOpen, setAddRoutinesOpen] = useState(false)
+  const [addFoldersOpen, setAddFoldersOpen] = useState(false)
+  const [addCreateOpen, setAddCreateOpen] = useState(false)
+  const [addCreateChoice, setAddCreateChoice] = useState<'routine' | 'folder' | null>(null)
+  const [addRoutineSettingsId, setAddRoutineSettingsId] = useState<string | null>(null)
+
+  useEffect(() => {
+    function checkSize() {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkSize()
+    window.addEventListener('resize', checkSize)
+    return () => window.removeEventListener('resize', checkSize)
+  }, [])
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -162,26 +193,53 @@ export default function CalendarView({
     setActiveRoutineId(activeRoutineId === routineId ? null : routineId)
   }
 
-  function handleDayClick(date: string | null) {
-    if (!date || !activeRoutineId) return
+  function addCheckinForRoutine(routineId: string, date: string) {
+    setCheckins((prev) => [...prev, { routine_id: routineId, date }])
+    startTransition(() => toggleCheckin(routineId, date))
+  }
 
-    const routineId = activeRoutineId
+  function removeCheckinForRoutine(routineId: string, date: string) {
+    setCheckins((prev) => prev.filter((c) => !(c.routine_id === routineId && c.date === date)))
+    startTransition(() => toggleCheckin(routineId, date))
+    setPopoverInfo(null)
+  }
 
-    const alreadyChecked = getCheckinsForDay(date).some(
-      (c) => c.routine_id === routineId
-    )
+  function handleDayClick(date: string | null, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!date) return
 
-    if (alreadyChecked) {
-      setCheckins((prev) =>
-        prev.filter((c) => !(c.routine_id === routineId && c.date === date))
-      )
-    } else {
-      setCheckins((prev) => [...prev, { routine_id: routineId, date }])
+    if (activeRoutineId) {
+      const routineId = activeRoutineId
+      const alreadyChecked = getCheckinsForDay(date).some((c) => c.routine_id === routineId)
+
+      if (alreadyChecked) {
+        setCheckins((prev) => prev.filter((c) => !(c.routine_id === routineId && c.date === date)))
+      } else {
+        setCheckins((prev) => [...prev, { routine_id: routineId, date }])
+      }
+
+      startTransition(async () => {
+        await toggleCheckin(routineId, date)
+      })
+      return
     }
 
-    startTransition(async () => {
-      await toggleCheckin(routineId, date)
-    })
+    setPopoverInfo(null)
+    setDayPickerExpandedFolder(null)
+    setAddRoutinesOpen(false)
+    setAddFoldersOpen(false)
+    setAddCreateOpen(false)
+    setAddCreateChoice(null)
+    setAddSectionOpen(false)
+    setAddRoutineSettingsId(null)
+
+    if (isMobile) {
+      setDayPicker(null)
+      setDayDetailOpen(date)
+    } else {
+      setDayDetailOpen(null)
+      setDayPicker({ x: e.clientX, y: e.clientY, date })
+    }
   }
 
   function handleToggleForm() {
@@ -349,8 +407,336 @@ export default function CalendarView({
     )
   }
 
+  function renderAddSection(date: string, closeAfterAdd: boolean) {
+    const notYetChecked = (r: Routine) => !getCheckinsForDay(date).some((c) => c.routine_id === r.id)
+    const looseRoutines = routines.filter((r) => !r.folder_id && notYetChecked(r))
+
+    return (
+      <div className="space-y-1">
+        <button
+          onClick={() => setAddRoutinesOpen(!addRoutinesOpen)}
+          className="flex w-full items-center gap-2 rounded p-1 text-left text-xs font-bold hover:bg-black/5"
+        >
+          <span>{addRoutinesOpen ? '▾' : '▸'}</span>
+          <span>Rotinas</span>
+        </button>
+        {addRoutinesOpen && (
+          <div className="ml-4 space-y-1">
+            {looseRoutines.length === 0 && <p className="p-1 text-xs opacity-60">Nada por marcar aqui.</p>}
+            {looseRoutines.map((r) => {
+              const settingsOpen = addRoutineSettingsId === r.id
+              return (
+                <div key={r.id}>
+                  <div className="flex items-center gap-2 rounded p-1 text-xs hover:bg-black/5">
+                    <button
+                      onClick={() => {
+                        addCheckinForRoutine(r.id, date)
+                        if (closeAfterAdd) setDayPicker(null)
+                      }}
+                      className="flex flex-1 items-center gap-2 truncate text-left"
+                    >
+                      <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: r.tag_color }} />
+                      <span className="truncate">{r.name}</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAddRoutineSettingsId(settingsOpen ? null : r.id)
+                      }}
+                      className="flex-shrink-0"
+                    >
+                      ⚙️
+                    </button>
+                  </div>
+
+                  {settingsOpen && (
+                    <div className="ml-6 mt-1 flex items-center gap-2 rounded bg-black/5 p-2 text-xs">
+                      <span>Pasta:</span>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          handleMoveRoutine(r.id, e.target.value)
+                          setAddRoutineSettingsId(null)
+                        }}
+                        className="rounded border bg-[var(--background)] p-1"
+                      >
+                        <option value="" disabled>
+                          Escolher...
+                        </option>
+                        {folders.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <button
+          onClick={() => setAddFoldersOpen(!addFoldersOpen)}
+          className="flex w-full items-center gap-2 rounded p-1 text-left text-xs font-bold hover:bg-black/5"
+        >
+          <span>{addFoldersOpen ? '▾' : '▸'}</span>
+          <span>Pastas</span>
+        </button>
+        {addFoldersOpen && (
+          <div className="ml-4 space-y-1">
+            {folders.length === 0 && <p className="p-1 text-xs opacity-60">Ainda não tens pastas.</p>}
+            {folders.map((f) => {
+              const folderRoutines = routines.filter((r) => r.folder_id === f.id && notYetChecked(r))
+              const isOpen = dayPickerExpandedFolder === f.id
+
+              return (
+                <div key={f.id}>
+                  <button
+                    onClick={() => setDayPickerExpandedFolder(isOpen ? null : f.id)}
+                    className="flex w-full items-center gap-2 rounded p-1 text-left text-xs hover:bg-black/5"
+                  >
+                    <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: f.color }} />
+                    <span className="flex-1 truncate">{f.name}</span>
+                    <span className="flex-shrink-0">{isOpen ? '▾' : '▸'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="ml-4">
+                      {folderRoutines.length === 0 && <p className="p-1 text-xs opacity-60">Nada por marcar aqui.</p>}
+                      {folderRoutines.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => {
+                            addCheckinForRoutine(r.id, date)
+                            if (closeAfterAdd) setDayPicker(null)
+                          }}
+                          className="flex w-full items-center gap-2 rounded p-1 text-left text-xs hover:bg-black/5"
+                        >
+                          <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: r.tag_color }} />
+                          <span className="truncate">{r.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <button
+          onClick={() => {
+            setAddCreateOpen(!addCreateOpen)
+            setAddCreateChoice(null)
+          }}
+          className="flex w-full items-center gap-2 rounded p-1 text-left text-xs font-bold hover:bg-black/5"
+        >
+          <span>{addCreateOpen ? '▾' : '▸'}</span>
+          <span>Criar novo</span>
+        </button>
+        {addCreateOpen && (
+          <div className="ml-4 space-y-2">
+            {!addCreateChoice && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const random = PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)]
+                    setColor(random)
+                    setName('')
+                    setSelectedFolderId('')
+                    setAddCreateChoice('routine')
+                  }}
+                  className="flex-1 rounded border p-1 text-xs"
+                >
+                  Rotina
+                </button>
+                <button
+                  onClick={() => {
+                    setFolderColor(PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)])
+                    setFolderName('')
+                    setAddCreateChoice('folder')
+                  }}
+                  className="flex-1 rounded border p-1 text-xs"
+                >
+                  Pasta
+                </button>
+              </div>
+            )}
+
+            {addCreateChoice === 'routine' && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!name.trim()) return
+                  handleAddRoutine(e)
+                  setAddCreateChoice(null)
+                  setAddCreateOpen(false)
+                }}
+                className="space-y-2"
+              >
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nome da rotina"
+                  className="w-full rounded border p-1 text-xs"
+                  autoFocus
+                />
+                <div className="flex flex-wrap items-center gap-1">
+                  {PRESET_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      className={`h-5 w-5 rounded-full border-2 ${color === c ? 'border-black' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    className="h-5 w-7 rounded border"
+                  />
+                </div>
+                <select
+                  value={selectedFolderId}
+                  onChange={(e) => setSelectedFolderId(e.target.value)}
+                  className="w-full rounded border p-1 text-xs"
+                >
+                  <option value="">Sem pasta</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddCreateChoice(null)}
+                    className="flex-1 rounded border py-1 text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="flex-1 rounded bg-black py-1 text-xs text-white">
+                    Criar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {addCreateChoice === 'folder' && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!folderName.trim()) return
+                  handleAddFolder(e)
+                  setAddCreateChoice(null)
+                  setAddCreateOpen(false)
+                }}
+                className="space-y-2"
+              >
+                <input
+                  type="text"
+                  value={folderName}
+                  onChange={(e) => setFolderName(e.target.value)}
+                  placeholder="Nome da pasta"
+                  className="w-full rounded border p-1 text-xs"
+                  autoFocus
+                />
+                <div className="flex flex-wrap items-center gap-1">
+                  {PRESET_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFolderColor(c)}
+                      className={`h-5 w-5 rounded-full border-2 ${folderColor === c ? 'border-black' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={folderColor}
+                    onChange={(e) => setFolderColor(e.target.value)}
+                    className="h-5 w-7 rounded border"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddCreateChoice(null)}
+                    className="flex-1 rounded border py-1 text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="flex-1 rounded bg-black py-1 text-xs text-white">
+                    Criar
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderCheckedInList(date: string) {
+    const dayCheckins = getCheckinsForDay(date)
+
+    if (dayCheckins.length === 0) {
+      return <p className="text-xs opacity-60">Sem rotinas marcadas.</p>
+    }
+
+    return (
+      <div className="space-y-2">
+        {dayCheckins.map((c) => {
+          const routine = getRoutine(c.routine_id)
+          const folder = routine ? getFolder(routine.folder_id) : null
+          if (!routine) return null
+
+          const textColor = getContrastText(routine.tag_color)
+
+          return (
+            <div
+              key={c.routine_id}
+              className="flex h-9 items-center overflow-hidden rounded-lg"
+              style={
+                folder
+                  ? { background: `linear-gradient(to right, ${folder.color} 50%, ${routine.tag_color} 50%)` }
+                  : { backgroundColor: routine.tag_color }
+              }
+            >
+              <span
+                className="flex-1 truncate px-3 text-sm font-bold"
+                style={{ color: textColor }}
+              >
+                {folder ? `${folder.name} > ${routine.name}` : routine.name}
+              </span>
+              <button
+                onClick={() => removeCheckinForRoutine(routine.id, date)}
+                className="flex-shrink-0 px-3 text-xs font-bold"
+                style={{ color: textColor }}
+              >
+                Apagar
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
-    <div onClick={() => setPopoverInfo(null)}>
+    <div
+      onClick={() => {
+        setPopoverInfo(null)
+        setDayPicker(null)
+      }}
+      className="min-h-screen"
+    >
       <div className="flex flex-col gap-4 md:flex-row md:gap-8">
         {/* Calendário */}
         <div className="order-2 flex-1 md:order-1">
@@ -377,50 +763,63 @@ export default function CalendarView({
               return (
                 <div
                   key={i}
-                  onClick={() => handleDayClick(date)}
-                  className={`calendar-cell relative h-20 rounded border p-1 ${
+                  onClick={(e) => handleDayClick(date, e)}
+                  className={`calendar-cell relative h-24 rounded border p-1 ${
                     date ? 'cursor-pointer' : ''
                   } ${activeRoutineId && date ? 'ring-1 ring-gray-300' : ''} ${
                     today ? 'today border-2' : ''
                   }`}
                   style={today ? { borderColor: 'var(--foreground)' } : undefined}
                 >
-                {date && (
-                <>
-                  <div className="text-xs">{dayNumber}</div>
-                  <div className="absolute inset-x-1 bottom-1 top-5 flex flex-wrap content-center items-center justify-center gap-0.5 overflow-hidden">
-                    {dayCheckins.map((c) => {
-                      const routine = getRoutine(c.routine_id)
-                      const folder = routine ? getFolder(routine.folder_id) : null
-                      const dotSize = getDotSize(dayCheckins.length)
+                  {date && (
+                    <>
+                      <div className="text-xs">{dayNumber}</div>
+                      <div className="absolute inset-x-1 bottom-1 top-5 flex flex-col gap-0.5 overflow-y-auto">
+                        {dayCheckins.map((c) => {
+                          const routine = getRoutine(c.routine_id)
+                          const folder = routine ? getFolder(routine.folder_id) : null
+                          const textColor = getContrastText(routine?.tag_color)
 
-                      return (
-                        <span
-                          key={c.routine_id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const text = routine
-                              ? folder
-                                ? `${folder.name} > ${routine.name}`
-                                : routine.name
-                              : ''
-                            setPopoverInfo({ x: e.clientX, y: e.clientY, text })
-                          }}
-                          className="cursor-pointer rounded-full"
-                          style={{
-                            width: dotSize,
-                            height: dotSize,
-                            flexShrink: 0,
-                            ...(folder && routine
-                              ? { background: `conic-gradient(${folder.color} 0deg 180deg, ${routine.tag_color} 180deg 360deg)` }
-                              : { backgroundColor: routine?.tag_color }),
-                          }}
-                        />
-                      )
-                    })}
-                  </div>
-                </>
-              )}
+                          return (
+                            <div
+                              key={c.routine_id}
+                              onClick={(e) => {
+                                if (activeRoutineId) return
+                                e.stopPropagation()
+                                const text = routine
+                                  ? folder
+                                    ? `${folder.name} > ${routine.name}`
+                                    : routine.name
+                                  : ''
+                                setDayPicker(null)
+                                setDayDetailOpen(null)
+                                setPopoverInfo({
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                  text,
+                                  routineId: c.routine_id,
+                                  date,
+                                })
+                              }}
+                              className="flex h-3.5 flex-shrink-0 cursor-pointer items-center overflow-hidden rounded-sm md:h-[18px]"
+                              style={
+                                folder && routine
+                                  ? { background: `linear-gradient(to right, ${folder.color} 50%, ${routine.tag_color} 50%)` }
+                                  : { backgroundColor: routine?.tag_color }
+                              }
+                            >
+                              <span
+                                className="hidden truncate px-1 text-[10px] md:inline"
+                                style={{ color: textColor }}
+                              >
+                                {routine?.name}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               )
             })}
@@ -428,25 +827,25 @@ export default function CalendarView({
           <ThemeSwitcher />
         </div>
 
-        {/* Menu lateral*/}
+        {/* Menu lateral: rotinas + pastas */}
         <div className="order-1 w-full md:order-2 md:w-56">
 
-          {/* Rotinas */}
-            <button
-              onClick={() => {
-                const closing = showMobileRoutines
-                setShowMobileRoutines(!showMobileRoutines)
-                if (closing && activeRoutineId) {
-                  const routine = getRoutine(activeRoutineId)
-                  if (routine && !routine.folder_id) {
-                    setActiveRoutineId(null)
-                  }
+          <button
+            onClick={() => {
+              const closing = showMobileRoutines
+              setShowMobileRoutines(!showMobileRoutines)
+              if (closing && activeRoutineId) {
+                const routine = getRoutine(activeRoutineId)
+                if (routine && !routine.folder_id) {
+                  setActiveRoutineId(null)
                 }
-              }}
-              className="mb-2 flex items-center gap-2 text-sm font-bold md:hidden"
-            >
-              ☰ Rotinas
-            </button>
+              }
+            }}
+            className="calendar-cell mb-2 flex w-full cursor-pointer items-center gap-2 !rounded-2xl px-5 py-3 text-sm font-bold md:hidden"
+          >
+            <span>{showMobileRoutines ? '▾' : '▸'}</span>
+            <span>Rotinas</span>
+          </button>
 
           <div className={`${showMobileRoutines ? 'block' : 'hidden'} md:block`}>
             <button onClick={handleToggleForm} className="mb-2 text-sm font-bold">
@@ -511,7 +910,6 @@ export default function CalendarView({
             </div>
           </div>
 
-          {/* Pastas */}
           <button
             onClick={() => {
               const closing = showMobileFolders
@@ -523,9 +921,10 @@ export default function CalendarView({
                 }
               }
             }}
-            className="mb-2 flex items-center gap-2 text-sm font-bold md:hidden"
+            className="calendar-cell mb-2 flex w-full cursor-pointer items-center gap-2 !rounded-2xl px-5 py-3 text-sm font-bold md:hidden"
           >
-            ☰ Pastas
+            <span>{showMobileFolders ? '▾' : '▸'}</span>
+            <span>Pastas</span>
           </button>
 
           <div className={`${showMobileFolders ? 'block' : 'hidden'} md:block`}>
@@ -642,10 +1041,63 @@ export default function CalendarView({
 
       {popoverInfo && (
         <div
+          onClick={(e) => e.stopPropagation()}
           className="fixed z-50 rounded bg-black px-2 py-1 text-xs text-white shadow-lg"
           style={{ left: popoverInfo.x + 8, top: popoverInfo.y + 8 }}
         >
-          {popoverInfo.text}
+          <div>{popoverInfo.text}</div>
+          {!activeRoutineId && (
+            <button
+              onClick={() => removeCheckinForRoutine(popoverInfo.routineId, popoverInfo.date)}
+              className="mt-1 text-[10px] underline"
+            >
+              Apagar
+            </button>
+          )}
+        </div>
+      )}
+
+      {dayPicker && !activeRoutineId && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="fixed z-50 max-h-64 w-56 overflow-y-auto rounded border bg-[var(--background)] p-2 shadow-lg"
+          style={{ left: dayPicker.x + 8, top: dayPicker.y + 8 }}
+        >
+          {renderAddSection(dayPicker.date, true)}
+        </div>
+      )}
+
+      {dayDetailOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="calendar-cell relative flex max-h-[80vh] w-full max-w-sm flex-col !rounded-2xl p-5"
+          >
+            <div className="mb-3 flex flex-shrink-0 items-center justify-between">
+              <h3 className="text-sm font-bold">
+                {dayDetailOpen.split('-')[2]} de {MESES[Number(dayDetailOpen.split('-')[1]) - 1]}
+              </h3>
+              <button onClick={() => setDayDetailOpen(null)} className="text-2xl leading-none">×</button>
+            </div>
+
+            <div className="overflow-y-auto">
+              <div className="mb-4">{renderCheckedInList(dayDetailOpen)}</div>
+
+              <div className="border-t pt-3">
+                <button
+                  onClick={() => setAddSectionOpen(!addSectionOpen)}
+                  className="flex w-full items-center gap-2 text-xs font-bold opacity-80"
+                >
+                  <span>{addSectionOpen ? '▾' : '▸'}</span>
+                  <span>Adicionar</span>
+                </button>
+
+                {addSectionOpen && (
+                  <div className="mt-2">{renderAddSection(dayDetailOpen, false)}</div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -653,14 +1105,14 @@ export default function CalendarView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-80 rounded bg-[var(--background)] p-4 shadow-lg">
             <p className="mb-4 text-sm">
-              Apagar a pasta <strong>{folderToDelete.name}</strong>. Manter rotinas ou apagar?
+              Apagar a pasta <strong>{folderToDelete.name}</strong>.
             </p>
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => handleDeleteFolder(true)}
                 className="rounded border py-2 text-sm hover:bg-gray-100"
               >
-                Manter rotinas soltas
+                Manter rotinas
               </button>
               <button
                 onClick={() => handleDeleteFolder(false)}
